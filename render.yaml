@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ai-customer-support-automation
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt && python init_rag.py"
+    startCommand: "gunicorn web_app:app"
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        generateValue: true
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_API_KEY
+        sync: false
+

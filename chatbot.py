@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-IT Support Chatbot - Enhanced Edition
-Hybrid search: Keyword (Thai-optimized) → RAG → LLM
-With conversation memory and improved scoring
+AI-Powered Customer Support Chatbot - Electronics & Gadgets Global
+Hybrid search: Keyword Matching -> RAG Vector Search -> Generative AI
+With conversation memory and intelligent ticket escalation suggestions.
 """
 
 import json
@@ -16,6 +16,7 @@ import urllib.request
 import urllib.error
 from collections import defaultdict
 import logging
+
 logger = logging.getLogger(__name__)
 
 # ============================================================
@@ -23,15 +24,15 @@ logger = logging.getLogger(__name__)
 # ============================================================
 KB_FILE = Path(__file__).parent / "knowledge_base.json"
 
-USE_LLM = os.environ.get("USE_LLM", "false").lower() == "true"
+USE_LLM = os.environ.get("USE_LLM", "true").lower() == "true"
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("LLM_API_KEY") or ""
 
-# LLM Config (Xiaomi Token Plan)
-LLM_API_URL = "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions"
-LLM_MODEL = "mimo-v2.5"
-LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+# External LLM Config (Optional)
+LLM_API_URL = os.getenv("LLM_API_URL", "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions")
+LLM_MODEL = os.getenv("LLM_MODEL", "mimo-v2.5")
 
 # Initialize RAG Engine
-rag_engine = RAGEngine(api_key=LLM_API_KEY)
+rag_engine = RAGEngine(api_key=GOOGLE_API_KEY)
 
 # ============================================================
 # CONVERSATION MEMORY (per session, with TTL)
@@ -78,26 +79,57 @@ def load_kb():
             return json.load(f)
     except FileNotFoundError:
         logger.error(f"Knowledge base file not found: {KB_FILE}")
-        return {"categories": [], "escalation": {"message": "กรุณาติดต่อ IT Support", "hotline": "ext.1234"}}
+        return {
+            "categories": [],
+            "escalation": {
+                "message": "I could not find an answer in our knowledge base. Would you like to create a support ticket?",
+                "hotline": "1-800-APEXTECH"
+            }
+        }
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in knowledge base: {e}")
-        return {"categories": [], "escalation": {"message": "กรุณาติดต่อ IT Support", "hotline": "ext.1234"}}
+        return {
+            "categories": [],
+            "escalation": {
+                "message": "I could not find an answer in our knowledge base. Would you like to create a support ticket?",
+                "hotline": "1-800-APEXTECH"
+            }
+        }
 
 # ============================================================
-# THAI-OPTIMIZED KEYWORD MATCHING
+# TOKENIZATION & KEYWORD MATCHING
 # ============================================================
-
-# Common Thai stop words to ignore
-THAI_STOP_WORDS = set([
+STOP_WORDS = set([
+    # English
+    "the", "is", "a", "an", "to", "and", "or", "of", "in", "for",
+    "how", "what", "why", "can", "do", "does", "i", "my", "your", "it",
+    "me", "you", "we", "they", "this", "that", "there", "with", "on", "at",
+    "please", "help", "need", "want", "tell",
+    # Thai
     "ครับ", "ค่ะ", "คะ", "นะ", "มั้ย", "ไหม", "ได้", "จะ", "ให้",
     "ที่", "ของ", "ใน", "เป็น", "มี", "ไป", "มา", "ทำ", "แล้ว",
     "และ", "หรือ", "แต่", "ไม่", "ก็", "ถ้า", "จาก", "กับ",
-    "the", "is", "a", "an", "to", "and", "or", "of", "in", "for",
-    "how", "what", "why", "can", "do", "i", "my", "your", "it",
 ])
 
-# Thai synonyms / related terms for better matching
+# For backward compatibility with existing tests
+THAI_STOP_WORDS = STOP_WORDS
+
 SYNONYM_MAP = {
+    # Electronics & Gadgets
+    "headphones": ["headset", "earphones", "earbuds", "audio", "listening", "can"],
+    "earbuds": ["earbud", "buds", "earphones", "headphones", "airpods"],
+    "smartwatch": ["watch", "fitness tracker", "band", "wearable", "clock"],
+    "laptop": ["notebook", "computer", "pc", "macbook"],
+    "speaker": ["bluetooth speaker", "audio", "soundbox", "boombox"],
+    "bluetooth": ["bt", "pair", "pairing", "connect", "connection", "wireless"],
+    "pairing": ["pair", "bluetooth", "connect", "sync", "link"],
+    "battery": ["charge", "charging", "power", "dead", "drain", "draining"],
+    "screen": ["display", "monitor", "flicker", "blank", "black"],
+    "overheating": ["hot", "fan", "heat", "thermal", "warm"],
+    "warranty": ["claim", "replacement", "repair", "defect", "rma", "guarantee"],
+    "order": ["tracking", "shipment", "delivery", "shipping", "courier", "package"],
+    "tracking": ["track", "order", "status", "delivery", "courier", "parcel"],
+    # Retained Thai & general synonyms
     "wifi": ["ไวไฟ", "wi-fi", "วายฟาย", "อินเทอร์เน็ต", "internet", "เน็ต"],
     "ไวไฟ": ["wifi", "wi-fi", "internet"],
     "printer": ["ปริ้นเตอร์", "ปริ้นท์", "พิมพ์", "print"],
@@ -106,39 +138,22 @@ SYNONYM_MAP = {
     "รหัสผ่าน": ["password", "pass", "pwd"],
     "email": ["อีเมล", "เมล", "mail", "gmail", "outlook"],
     "อีเมล": ["email", "mail"],
-    "vpn": ["วีพีเอ็น"],
-    "computer": ["คอม", "คอมพิวเตอร์", "เครื่อง", "pc"],
-    "คอม": ["computer", "pc"],
-    "login": ["เข้าสู่ระบบ", "ล็อกอิน", "signin", "sign-in"],
-    "เข้าสู่ระบบ": ["login", "signin"],
     "error": ["ข้อผิดพลาด", "เออเร่อ", "พัง", "เสีย", "ใช้ไม่ได้"],
-    "update": ["อัพเดต", "อัพเดท", "update"],
-    "install": ["ติดตั้ง", "ลงโปรแกรม"],
-    "ติดตั้ง": ["install"],
     "slow": ["ช้า", "อืด", "lag", "หน่วง"],
-    "ช้า": ["slow", "lag"],
-    "screen": ["หน้าจอ", "จอ", "monitor"],
-    "keyboard": ["คีย์บอร์ด", "แป้นพิมพ์"],
-    "mouse": ["เมาส์", "เม้าส์"],
-    "file": ["ไฟล์", "เอกสาร"],
-    "folder": ["โฟลเดอร์", "แฟ้ม"],
-    "backup": ["สำรองข้อมูล", "แบ็คอัพ"],
-    "virus": ["ไวรัส", "มัลแวร์", "malware", "antivirus"],
 }
 
 def tokenize_thai(text):
-    """Simple Thai tokenizer - split on spaces + extract Thai word chunks."""
+    """Tokenize query string into normalized lowercase tokens (English & multilingual)."""
     text = text.lower().strip()
-    # Remove punctuation
     text = re.sub(r'[^\w\sก-๙]', ' ', text)
     tokens = []
     for word in text.split():
-        if word and word not in THAI_STOP_WORDS:
+        if word and word not in STOP_WORDS:
             tokens.append(word)
     return tokens
 
 def expand_with_synonyms(tokens):
-    """Expand token set with synonyms for better matching."""
+    """Expand token set with synonyms for broader matching."""
     expanded = set(tokens)
     for token in tokens:
         if token in SYNONYM_MAP:
@@ -146,7 +161,7 @@ def expand_with_synonyms(tokens):
     return expanded
 
 def substring_match(user_input, target_text):
-    """Check if any user token appears as substring in target (good for Thai)."""
+    """Check if any user token appears as a substring in target."""
     user_tokens = tokenize_thai(user_input)
     target_lower = target_text.lower()
     matches = 0
@@ -156,23 +171,22 @@ def substring_match(user_input, target_text):
     return matches
 
 def find_relevant_faqs(user_input, kb):
-    """Find FAQs matching user input using Thai-optimized keyword scoring."""
+    """Find FAQs matching user input using keyword scoring."""
     user_tokens = tokenize_thai(user_input)
     user_expanded = expand_with_synonyms(user_tokens)
     user_set = set(user_tokens)
     scores = []
 
-    for category in kb["categories"]:
-        cat_keywords = set(kw.lower() for kw in category["keywords"])
+    for category in kb.get("categories", []):
+        cat_keywords = set(kw.lower() for kw in category.get("keywords", []))
 
-        for faq in category["faqs"]:
+        for faq in category.get("faqs", []):
             score = 0
 
-            # 1. Category keyword match (highest weight)
+            # 1. Category keyword match
             for kw in cat_keywords:
                 if kw in user_expanded:
                     score += 5
-                # Substring match for Thai partial words
                 for token in user_tokens:
                     if len(token) >= 2 and (kw in token or token in kw):
                         score += 3
@@ -180,18 +194,18 @@ def find_relevant_faqs(user_input, kb):
             # 2. Exact word overlap with question
             q_tokens = set(tokenize_thai(faq["question"]))
             overlap = user_set & q_tokens
-            score += len(overlap) * 3
+            score += len(overlap) * 4
 
             # 3. Expanded synonym overlap with question
             q_expanded = expand_with_synonyms(q_tokens)
             synonym_overlap = user_expanded & q_expanded
-            score += len(synonym_overlap) * 1
+            score += len(synonym_overlap) * 2
 
-            # 4. Substring match (critical for Thai without word segmentation)
+            # 4. Substring match in question
             sub_matches = substring_match(user_input, faq["question"])
             score += sub_matches * 2
 
-            # 5. Substring match in answer too (lower weight)
+            # 5. Substring match in answer
             sub_answer = substring_match(user_input, faq["answer"])
             score += sub_answer * 1
 
@@ -202,68 +216,95 @@ def find_relevant_faqs(user_input, kb):
     return scores[:3]
 
 # ============================================================
-# LLM ENHANCED RESPONSE (Optional)
+# LLM RESPONSE GENERATION
 # ============================================================
 def llm_answer(user_input, context_faqs, session_id="default"):
-    """Use LLM to generate better answer from FAQ context + conversation history."""
-    if not USE_LLM or not LLM_API_KEY:
+    """Generate concise, natural response using Gemini or configured LLM."""
+    if not USE_LLM:
         return None
-
-
 
     context = "\n\n".join([
-        f"Q: {faq['question']}\nA: {faq['answer']}"
+        f"FAQ: {faq.get('question', '')}\nAnswer: {faq.get('answer', '')}"
         for _, faq, _ in context_faqs
     ])
-
     history = get_history_context(session_id)
 
-    prompt = f"""คุณเป็น IT Support Chatbot ตอบคำถามสั้น ชัดเจน เป็นภาษาไทย
-ใช้ข้อมูลจาก FAQ ด้านล่างเป็นหลัก ถ้าไม่มีข้อมูล ให้แนะนำติดต่อ IT Support
+    # 1. Try Google Gemini first if key available
+    if GOOGLE_API_KEY:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=GOOGLE_API_KEY)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            prompt = f"""You are an expert Customer Support AI Assistant for ApexTech Electronics & Gadgets Global.
+Provide a clear, helpful, and concise answer to the customer's question.
+Rely primarily on the Knowledge Base context below.
+If the solution is not clearly covered in the FAQs, politely recommend that the customer create a Support Ticket on this portal.
 
-{f"ประวัติสนทนาล่าสุด:{chr(10)}{history}{chr(10)}" if history else ""}
-FAQ Context:
+{f"Conversation Context:\n{history}\n" if history else ""}
+Knowledge Base Context:
 {context}
 
-คำถามผู้ใช้: {user_input}
+Customer Question: {user_input}
 
-ตอบ:"""
+Helpful Answer:"""
+            res = model.generate_content(prompt)
+            if res and res.text:
+                return res.text.strip()
+        except Exception as e:
+            logger.warning(f"Gemini call failed ({e}). Trying fallback endpoint.")
 
-    try:
-        data = json.dumps({
-            "model": LLM_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.3
-        }).encode("utf-8")
+    # 2. Fallback to generic HTTP completion endpoint if configured
+    if GOOGLE_API_KEY and LLM_API_URL:
+        try:
+            prompt = f"You are ApexTech Customer Support AI.\nContext:\n{context}\n\nQuestion: {user_input}\nAnswer:"
+            data = json.dumps({
+                "model": LLM_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 500,
+                "temperature": 0.3
+            }).encode("utf-8")
 
-        req = urllib.request.Request(
-            LLM_API_URL,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {LLM_API_KEY}"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode())
-            return result["choices"][0]["message"]["content"]
-    except Exception as e:
-        logger.error(f"LLM Error: {e}")
-        return None
+            req = urllib.request.Request(
+                LLM_API_URL,
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {GOOGLE_API_KEY}"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read().decode())
+                return result["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.warning(f"External LLM endpoint failed: {e}")
+
+    return None
 
 # ============================================================
-# CHATBOT RESPONSE (Enhanced)
+# CHATBOT RESPONSE PIPELINE
 # ============================================================
 def get_response(user_input, kb, session_id="default"):
-    """Get chatbot response with improved search pipeline."""
-
-    # Track conversation
+    """
+    Main chatbot inquiry resolver.
+    Pipeline:
+    1. Keyword scoring on Knowledge Base
+    2. RAG vector similarity search
+    3. Generative AI formulation when LLM is available
+    4. Proactive support ticket escalation if unresolved
+    """
     add_to_history(session_id, "user", user_input)
 
-    # 1. Keyword Matching (threshold lowered for better recall)
+    # Escalation message with ticket recommendation
+    escalation_text = (
+        kb.get("escalation", {}).get(
+            "message",
+            "I could not find an exact resolution for your inquiry. Would you like to create a support ticket with our customer care team? You can use the 'Raise a Ticket' form below."
+        )
+    )
+
+    # 1. Keyword Matching
     exact_matches = find_relevant_faqs(user_input, kb)
-    if exact_matches and exact_matches[0][0] >= 5:
+    if exact_matches and exact_matches[0][0] >= 6:
         best = exact_matches[0][1]
         response = f"**{best['question']}**\n\n{best['answer']}"
         add_to_history(session_id, "bot", response)
@@ -277,72 +318,65 @@ def get_response(user_input, kb, session_id="default"):
         matches = []
 
     if not matches:
-        # If keyword had low matches, use those instead of escalating
-        if exact_matches and exact_matches[0][0] >= 2:
+        if exact_matches and exact_matches[0][0] >= 3:
             best = exact_matches[0][1]
-            response = f"ไม่แน่ใจว่าตรง 100% แต่คุณอาจหมายถึง:\n\n**{best['question']}**\n{best['answer']}\n\nหากยังไม่ใช่ กรุณาติดต่อ {kb['escalation']['hotline']}"
+            response = f"You might find this helpful:\n\n**{best['question']}**\n\n{best['answer']}\n\n*If this does not resolve your problem, feel free to raise a support ticket below.*"
             add_to_history(session_id, "bot", response)
-            return response, "Keyword (Low)"
+            return response, "Keyword (Suggested)"
 
-        response = kb["escalation"]["message"]
-        add_to_history(session_id, "bot", response)
-        return response, "Escalated"
+        add_to_history(session_id, "bot", escalation_text)
+        return escalation_text, "Escalated"
 
     best_match = matches[0]
-    best_score = best_match.get('score', 0)
+    best_score = best_match.get("score", 0)
 
-    # Combine keyword + RAG scores for better accuracy
     keyword_bonus = 0
     if exact_matches:
-        keyword_bonus = exact_matches[0][0] * 0.5
+        keyword_bonus = exact_matches[0][0] * 0.05
+    combined_score = best_score + keyword_bonus
 
-    combined_score = best_score + (keyword_bonus / 10)
-
-    # High confidence → return directly
-    if combined_score >= 0.6:
-        # Try LLM for better phrasing
-        context_faqs = [(m.get('score', 0), m, m.get('category', '')) for m in matches]
-        llm_response = llm_answer(user_input, context_faqs, session_id)
-
-        if llm_response:
-            add_to_history(session_id, "bot", llm_response)
-            return llm_response, "Gemini AI"
+    # High confidence -> try LLM or return structured FAQ
+    if combined_score >= 0.5:
+        context_faqs = [(m.get("score", 0), m, m.get("category", "")) for m in matches]
+        llm_resp = llm_answer(user_input, context_faqs, session_id)
+        if llm_resp:
+            add_to_history(session_id, "bot", llm_resp)
+            return llm_resp, "Gemini AI"
 
         response = f"**{best_match['question']}**\n\n{best_match['answer']}"
         add_to_history(session_id, "bot", response)
         return response, "RAG"
 
-    # Medium confidence → suggest with disclaimer
-    if combined_score >= 0.3:
-        response = f"คุณอาจหมายถึง:\n\n**{best_match['question']}**\n{best_match['answer']}\n\nหากยังไม่ใช่ กรุณาติดต่อ {kb['escalation']['hotline']}"
+    # Medium confidence -> suggest with escalation option
+    if combined_score >= 0.25:
+        response = (
+            f"Here is the most relevant information for your query:\n\n"
+            f"**{best_match['question']}**\n\n{best_match['answer']}\n\n"
+            f"---\n*Need more help? You can submit a support ticket using the form below.*"
+        )
         add_to_history(session_id, "bot", response)
         return response, "RAG (Suggested)"
 
-    # Low confidence → escalate
-    response = kb["escalation"]["message"]
-    add_to_history(session_id, "bot", response)
-    return response, "Escalated"
+    # Low confidence -> escalate
+    add_to_history(session_id, "bot", escalation_text)
+    return escalation_text, "Escalated"
 
 # ============================================================
-# MAIN LOOP
+# CLI INTERACTION
 # ============================================================
 def main():
     kb = load_kb()
-
-    print("=" * 50)
-    print("  IT Support Chatbot - Enhanced Edition")
-    print("=" * 50)
-    print("  Type your IT questions here")
-    print("  Type 'quit' or 'exit' to leave")
-    print("  Type 'help' to see all categories")
-    print("=" * 50)
-    print()
+    print("=" * 60)
+    print("  ApexTech - AI-Powered Customer Support & Service Automation")
+    print("=" * 60)
+    print("  Ask about Products, Order Tracking, Warranty, or General Support")
+    print("  Type 'quit' or 'exit' to leave | Type 'help' for categories")
+    print("=" * 60 + "\n")
 
     session_id = "terminal_session"
-
     while True:
         try:
-            user_input = input("You: ").strip()
+            user_input = input("Customer: ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\nGoodbye!")
             break
@@ -350,20 +384,19 @@ def main():
         if not user_input:
             continue
 
-        if user_input.lower() in ["quit", "exit", "ออก", "q"]:
-            print("Goodbye!")
+        if user_input.lower() in ["quit", "exit", "q"]:
+            print("Thank you for choosing ApexTech. Goodbye!")
             break
 
-        if user_input.lower() in ["help", "ช่วย", "หมวดหมู่"]:
-            print("\nCategories:")
-            for cat in kb["categories"]:
-                print(f"  - {cat['name']} ({len(cat['faqs'])} FAQ)")
-            print(f"\nContact IT Support: {kb['escalation']['hotline']}")
-            print()
+        if user_input.lower() in ["help", "categories"]:
+            print("\nSupport Categories:")
+            for cat in kb.get("categories", []):
+                print(f"  - {cat['name']} ({len(cat.get('faqs', []))} FAQs)")
+            print(f"\nContact Support Hotline: {kb.get('escalation', {}).get('hotline', '1-800-APEXTECH')}\n")
             continue
 
         response, engine = get_response(user_input, kb, session_id)
-        print(f"\nBot [{engine}]: {response}\n")
+        print(f"\nAssistant [{engine}]:\n{response}\n")
 
 if __name__ == "__main__":
     main()

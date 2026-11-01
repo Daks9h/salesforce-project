@@ -1,25 +1,30 @@
-# ไฟล์ชั่วคราว
-add_faqs.py
-*.pyc
+# Temporary & Cache files
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 
-# ไฟล์ภาษาไทย (encoding issue)
-คู่มือ*
-
-# Python env
+# Python Virtual Environments
 venv/
-.env
+.venv/
+env/
 
-# OS
+# Environment Variables & Secrets
+.env
+config.json
+
+# Local Persistent Databases & Vectors
+tickets.db
+tickets.db-wal
+tickets.db-shm
+chroma_db/
+
+# Operating System
 .DS_Store
 Thumbs.db
 
-# Build/script files
-build_index.py
-create_guide.py
-pin_repo.py
-
-# Images (except screenshots/branding)
+# Static image overrides
 *.png
 !screenshot.png
 !screenshot-dashboard.png
@@ -27,13 +32,3 @@ pin_repo.py
 !chatbot_qr.png
 !icon-192.png
 !icon-512.png
-
-# Docs
-HANDOFF.md
-QUICK_HANDOFF.md
-
-# Data/Runtime
-chroma_db/
-*_index*.html
-config.json
-tickets.db
