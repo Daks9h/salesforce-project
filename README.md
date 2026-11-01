@@ -1,6 +1,24 @@
 # AI-Powered Customer Support and Service Automation
 
+[![Live Demo](https://img.shields.io/badge/Demo-Live_on_Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://salesforce-project-kappa.vercel.app/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Framework-Flask_3.1-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Vector DB](https://img.shields.io/badge/Vector_DB-ChromaDB-6A0DAD?style=for-the-badge)](https://www.trychroma.com/)
+[![Tests](https://img.shields.io/badge/Tests-49_Passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://docs.pytest.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
 An academic full-stack project demonstrating intelligent customer support automation, retrieval-augmented generation (RAG), and service ticket management for an international Electronics & Gadgets enterprise.
+
+---
+
+## 🌐 Live Production Deployment
+
+| Service | Live Link | Credentials / Info |
+|---|---|---|
+| **Customer Support Portal** | [https://salesforce-project-kappa.vercel.app/](https://salesforce-project-kappa.vercel.app/) | Public Access |
+| **Admin Operations Dashboard** | [https://salesforce-project-kappa.vercel.app/dashboard](https://salesforce-project-kappa.vercel.app/dashboard) | `admin` / `admin123` |
+| **System Diagnostics & Health API** | [https://salesforce-project-kappa.vercel.app/api/health](https://salesforce-project-kappa.vercel.app/api/health) | Live Diagnostics (`200 OK`) |
+| **GitHub Repository** | [https://github.com/Daks9h/salesforce-project](https://github.com/Daks9h/salesforce-project) | Open-Source Codebase |
 
 ---
 
@@ -43,15 +61,15 @@ The core objective is to automate frontline customer support using an **AI Assis
           └──────────────────┘ └──────────────┘
 ```
 
-- **Frontend Interface**: Lightweight, responsive SaaS design with a light palette and navy blue/indigo accents. Built with HTML5, CSS3, and modern vanilla JavaScript. No heavy external frameworks required.
+- **Frontend Interface**: Lightweight, responsive SaaS design with a clean light palette and navy blue/indigo accents. Built with HTML5, CSS3, and modern vanilla JavaScript. No heavy external frameworks required.
 - **Backend Framework**: Python 3.12 with **Flask 3.1**, session-based admin authentication, and **Flask-Limiter** rate limiting.
-- **Persistent Database**: SQLite (`tickets.db`) with Write-Ahead Logging (WAL), automatic schema migration, and demo sample data seeding.
+- **Persistent Database**: SQLite (`tickets.db`) with Write-Ahead Logging (WAL), automatic schema migration, and demo sample data seeding. Uses `/tmp/tickets.db` on serverless runtimes.
 - **AI Automation & RAG**:
   - **Vector Embeddings**: ChromaDB persistent store with fast, deterministic, zero-download feature-hashed embeddings and support for Google Generative AI embeddings.
   - **Hybrid Search**: Keyword scoring & synonym expansion $\rightarrow$ Vector search $\rightarrow$ Generative AI synthesis.
   - **Ticket Intelligence**: Automatic complaint classification, priority estimation, suggested customer responses, and recommended troubleshooting steps.
   - **Graceful Fallback**: 100% operational offline without any external API keys via rule-based heuristics and knowledge-base templates.
-- **Deployment Compatibility**: Gunicorn (Linux/Containers), Waitress (Windows/Cross-platform), Docker, Render, Railway.
+- **Deployment Compatibility**: Vercel Serverless Functions (`vercel.json` + `api/index.py`), Gunicorn (Linux/Containers), Waitress (Windows/Cross-platform), Docker, Render, Railway.
 
 ---
 
@@ -113,8 +131,8 @@ The application pre-seeds realistic demonstration cases for five core electronic
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/romeototo/it-support-chatbot.git
-cd it-support-chatbot
+git clone https://github.com/Daks9h/salesforce-project.git
+cd salesforce-project
 ```
 
 ### 2. Set Up Virtual Environment
@@ -142,6 +160,18 @@ copy .env.example .env
 # macOS / Linux
 cp .env.example .env
 ```
+
+#### 🔑 How to Generate a Flask Secret Key
+To generate a cryptographically secure 32-byte secret key for session encryption, run:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+Example output:
+```
+e4a9c8f18b329d47012bc58fa6c9103e5512df8b19a0d24c87e35b7190d64a2f
+```
+Paste this value into `.env` or your hosting dashboard as `FLASK_SECRET_KEY`.
+
 *(Optional)* Add your `GOOGLE_API_KEY` in `.env` if you want Google Gemini AI active. If omitted, the application runs seamlessly on built-in offline intelligence.
 
 ### 5. Initialize Knowledge Base & Vector Database
@@ -178,7 +208,10 @@ gunicorn --bind 0.0.0.0:5000 web_app:app
 The test suite covers unit tests for the chatbot, RAG engine, AI classification service, frontend static contracts, and full API integration tests:
 
 ```bash
-# Run all tests
+# Windows (in virtual environment)
+.\.venv\Scripts\pytest -v
+
+# macOS / Linux
 pytest -v
 ```
 
@@ -191,35 +224,34 @@ Expected result:
 
 ## 🌐 Production Deployment Guide
 
-### Option 1: Vercel (Easiest Serverless Deployment)
-The repository is pre-configured with [vercel.json](file:///c:/Users/ADMIN/Desktop/salesforce-project/vercel.json) and [api/index.py](file:///c:/Users/ADMIN/Desktop/salesforce-project/api/index.py):
-1. Push your repository to **GitHub**.
-2. Go to [Vercel Dashboard](https://vercel.com/) and click **"Add New..."** $\rightarrow$ **"Project"**.
-3. Import your GitHub repository.
-4. Expand **Environment Variables** and optionally add:
-   - `ADMIN_USER`: `admin`
-   - `ADMIN_PASS`: `<your-admin-password>`
-   - `FLASK_SECRET_KEY`: `<random-32-byte-hex>`
-   - `GOOGLE_API_KEY`: *(Optional: your Gemini API key)*
-5. Click **Deploy**. Vercel will build and assign your free live HTTPS URL (e.g., `https://your-project.vercel.app`).
+### Option 1: Vercel (Deployed Live)
+The application is deployed live at [https://salesforce-project-kappa.vercel.app/](https://salesforce-project-kappa.vercel.app/).
 
-### Option 2: Render (Recommended for Long-Term SQLite Persistence)
-1. Fork or push this repository to your GitHub account.
+To deploy your own instance to Vercel:
+1. Push your repository to **GitHub**:
+   ```bash
+   git add .
+   git commit -m "Deploy to Vercel"
+   git push origin main
+   ```
+2. Navigate to the [Vercel Dashboard](https://vercel.com/) $\rightarrow$ **"Add New..."** $\rightarrow$ **"Project"**.
+3. Import your GitHub repository (`Daks9h/salesforce-project`).
+4. Set the following **Environment Variables**:
+   - `ADMIN_USER`: `admin`
+   - `ADMIN_PASS`: `<your-admin-password>` (e.g., `admin123`)
+   - `FLASK_SECRET_KEY`: `<generated-32-byte-hex>`
+   - `GOOGLE_API_KEY`: *(Optional: your Google Gemini API key)*
+5. Click **Deploy**. Vercel will automatically build the serverless functions via `vercel.json` and serve static assets.
+
+### Option 2: Render (For Long-Term Persistent Storage)
+1. Push your repository to GitHub.
 2. Go to [Render Dashboard](https://dashboard.render.com/) $\rightarrow$ **New Web Service**.
-3. Connect your GitHub repository.
-4. Configure service settings:
-   - **Environment**: `Python`
+3. Connect your repository and configure:
    - **Build Command**: `pip install -r requirements.txt && python init_rag.py`
    - **Start Command**: `gunicorn web_app:app`
-5. In **Environment Variables**, add:
-   - `FLASK_ENV`: `production`
-   - `ADMIN_USER`: `admin`
-   - `ADMIN_PASS`: `<your-secure-password>`
-   - `FLASK_SECRET_KEY`: `<random-32-byte-hex>`
-   - `GOOGLE_API_KEY`: *(Optional: your Gemini API key)*
-6. Click **Deploy Web Service**.
+4. Set your environment variables and deploy.
 
-### Option 2: Docker Container
+### Option 3: Docker Container
 ```bash
 # Build Docker image
 docker build -t apextech-support .
@@ -234,7 +266,7 @@ docker run -p 5000:5000 -e ADMIN_PASS="secret123" apextech-support
 
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
-| `GET` | `/api/health` | Public | System health check and metadata |
+| `GET` | `/api/health` | Public | System health check and diagnostics |
 | `POST` | `/api/chat` | Public | Chatbot inquiry endpoint (RAG / AI) |
 | `POST` | `/api/tickets/new` | Public | Submit support ticket with AI auto-classification |
 | `GET` | `/api/tickets/lookup/<ticket_id>` | Public | Track ticket status and resolution notes |
